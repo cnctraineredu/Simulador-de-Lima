@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Treino de Limagem Mecânica</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Animações e estilos personalizados */
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+        .status-pulse {
+            animation: pulse-subtle 1.5s infinite ease-in-out;
+        }
+        .bg-correct {
+            background-color: #059669; /* Emerald 600 */
+        }
+        .bg-incorrect {
+            background-color: #dc2626; /* Red 600 */
+        }
+        .bg-idle {
+            background-color: #0f172a; /* Slate 900 */
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-idle" id="appBody">
+
+    <!-- Header / Barra Superior -->
+    <header class="p-4 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex justify-between items-center z-10">
+        <div class="flex items-center space-x-2">
+            <i class="fa-solid font-bold fa-screwdriver-wrench text-amber-500 text-xl"></i>
+            <h1 class="font-bold text-lg tracking-wide uppercase">Simulador de Limagem</h1>
+        </div>
+        <button id="toggleSimBtn" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded-full border border-slate-700 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-laptop text-amber-400"></i>
+            <span id="simBtnText">Modo PC</span>
+        </button>
+    </header>
+
+    <!-- Conteúdo Principal / Dashboard -->
+    <main class="flex-1 flex flex-col justify-center items-center px-4 py-2 text-center max-w-md mx-auto w-full">
+
+        <!-- Mensagem do Estado/Feedback -->
+        <div class="mb-4">
+            <span id="statusBadge" class="inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 mb-2 border border-slate-700 shadow-sm">
+                Aguardando Início
+            </span>
+            <h2 id="mainFeedback" class="text-2xl font-black tracking-tight text-white min-h-[64px] flex items-center justify-center px-2">
+                Pressione "Iniciar Treino" para começar
+            </h2>
+        </div>
+
+        <!-- Métrica Principal: GPM (Golpes Por Minuto) -->
+        <div class="bg-slate-900/60 backdrop-blur border border-white/10 rounded-3xl p-6 w-full shadow-2xl my-2">
+            <p class="text-xs uppercase tracking-widest font-semibold text-slate-400 mb-1">Cadência Atual</p>
+            <div class="flex justify-center items-baseline space-x-1">
+                <span id="gpmDisplay" class="text-7xl font-extrabold tracking-tight text-white">0</span>
+                <span class="text-lg font-bold text-slate-400">GPM</span>
+            </div>
+            
+            <!-- Faixa de Alvo de GPM -->
+            <div class="mt-4 pt-3 border-t border-white/10 flex justify-between items-center text-xs">
+                <span class="text-slate-400">Meta de Cadência:</span>
+                <span class="font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-md border border-emerald-800">50 - 60 GPM</span>
+            </div>
+        </div>
+
+        <!-- Indicador de Nível Vertical / Estabilidade -->
+        <div class="bg-slate-900/60 backdrop-blur border border-white/10 rounded-2xl p-4 w-full shadow-lg my-2">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Estabilidade Vertical</span>
+                <span id="tiltStatusText" class="text-xs font-bold text-slate-300">Nivelado</span>
+            </div>
+            <!-- Barra Visual do Nível -->
+            <div class="relative w-full h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <!-- Linha central de tolerância -->
+                <div class="absolute inset-y-0 left-[35%] right-[35%] bg-emerald-500/20 border-x border-emerald-500/40"></div>
+                <!-- Indicador móvel -->
+                <div id="tiltBubble" class="absolute top-0.5 bottom-0.5 w-3 bg-amber-400 rounded-full transition-all duration-75 left-[50%] -translate-x-1/2 shadow-md"></div>
+            </div>
+        </div>
+
+        <!-- Dados Brutos do Acelerômetro (Opcional/Debug) -->
+        <div id="rawDataContainer" class="w-full text-left text-[10px] font-mono text-slate-400 bg-slate-950/50 rounded-xl p-2.5 border border-slate-800/80 my-2 flex justify-around">
+            <div>X (Frente/Trás): <span id="accX" class="text-slate-200">0.0</span></div>
+            <div>Y (Inclin/Erro): <span id="accY" class="text-slate-200">0.0</span></div>
+            <div>Z (Inclin/Erro): <span id="accZ" class="text-slate-200">0.0</span></div>
+        </div>
+
+        <!-- Painel de Simulação no PC (Oculto por padrão) -->
+        <div id="simPanel" class="hidden w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-4 my-2 text-left space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase text-amber-400"><i class="fa-solid fa-sliders mr-1"></i> Controles de Simulação</span>
+                <span class="text-[10px] text-slate-400">Apenas para Testes</span>
+            </div>
+            
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <label class="text-slate-300">Cadência Simulada:</label>
+                    <span id="simGpmVal" class="font-mono text-amber-300">55 GPM</span>
+                </div>
+                <input type="range" id="simGpmSlider" min="30" max="80" value="55" class="w-full accent-amber-500 bg-slate-950 rounded-lg h-2">
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+                <span class="text-xs text-slate-300">Simular Desvio Vertical (Erro):</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="simTiltToggle" class="sr-only peer">
+                    <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
+            </div>
+        </div>
+    </main>
+
+    <!-- Controles Inferiores -->
+    <footer class="p-4 bg-slate-900/90 backdrop-blur border-t border-slate-800 z-10 max-w-md mx-auto w-full">
+        <button id="startStopBtn" class="w-full py-4 px-6 rounded-2xl font-bold text-lg uppercase tracking-wider shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white active:scale-95 transition-all flex items-center justify-center space-x-2">
+            <i class="fa-solid fa-play"></i>
+            <span>Iniciar Treino</span>
+        </button>
+    </footer>
+
+    <!-- Script de Lógica e Sensoriamento -->
+    <script>
+        // Estado da Aplicação
+        let isTraining = false;
+        let isSimulating = false;
+        let gpm = 0;
+        let strokesCount = 0;
+        let strokeTimestamps = [];
+        let isVerticalError = false;
+
+        // Configurações de Validação Mecânica
+        const MIN_GPM = 50;
+        const MAX_GPM = 60;
+        const VERTICAL_TOLERANCE = 3.2; // Tolerância para variação/desvio vertical no acelerômetro (m/s²)
+        const ACCEL_THRESHOLD = 2.5; // Limiar para detectar fim de passada do movimento da lima
+
+        // Controle de Passada/Pico
+        let lastAccelX = 0;
+        let strokeDirection = 0; // 1 = frente, -1 = trás
+
+        // Referências DOM
+        const appBody = document.getElementById('appBody');
+        const startStopBtn = document.getElementById('startStopBtn');
+        const gpmDisplay = document.getElementById('gpmDisplay');
+        const mainFeedback = document.getElementById('mainFeedback');
+        const statusBadge = document.getElementById('statusBadge');
+        const tiltStatusText = document.getElementById('tiltStatusText');
+        const tiltBubble = document.getElementById('tiltBubble');
+        const accXEl = document.getElementById('accX');
+        const accYEl = document.getElementById('accY');
+        const accZEl = document.getElementById('accZ');
+        const toggleSimBtn = document.getElementById('toggleSimBtn');
+        const simBtnText = document.getElementById('simBtnText');
+        const simPanel = document.getElementById('simPanel');
+        const simGpmSlider = document.getElementById('simGpmSlider');
+        const simGpmVal = document.getElementById('simGpmVal');
+        const simTiltToggle = document.getElementById('simTiltToggle');
+
+        // Configuração de Audio (Web Audio API para apito/feedback)
+        let audioCtx = null;
+        let lastSoundTime = 0;
+
+        function playSound(frequency, type = 'sine', duration = 0.15) {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const now = audioCtx.currentTime;
+                if (now - lastSoundTime < 0.2) return; // Evitar sobreposição excessiva de som
+                lastSoundTime = now;
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(frequency, now);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + duration);
+            } catch (e) {
+                console.log('Áudio não suportado ou bloqueado', e);
+            }
+        }
+
+        // Evento Iniciar / Parar Treino
+        startStopBtn.addEventListener('click', async () => {
+            if (!isTraining) {
+                await requestSensorPermission();
+                startTraining();
+            } else {
+                stopTraining();
+            }
+        });
+
+        // Alternar Modo Simulação (Para uso no Computador)
+        toggleSimBtn.addEventListener('click', () => {
+            isSimulating = !isSimulating;
+            simPanel.classList.toggle('hidden', !isSimulating);
+            simBtnText.textContent = isSimulating ? "Modo Real" : "Modo PC";
+            if (isSimulating) {
+                document.getElementById('rawDataContainer').classList.add('hidden');
+            } else {
+                document.getElementById('rawDataContainer').classList.remove('hidden');
+            }
+        });
+
+        // Atualizar valor da simulação
+        simGpmSlider.addEventListener('input', (e) => {
+            simGpmVal.textContent = `${e.target.value} GPM`;
+        });
+
+        // Solicitar Permissão do Acelerômetro (Especialmente iOS 13+)
+        async function requestSensorPermission() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                try {
+                    const permissionState = await DeviceMotionEvent.requestPermission();
+                    if (permissionState !== 'granted') {
+                        alert('Permissão para acessar o acelerômetro foi negada.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao solicitar permissão:', error);
+                }
+            }
+        }
+
+        // Iniciar Monitoramento
+        function startTraining() {
+            isTraining = true;
+            strokesCount = 0;
+            strokeTimestamps = [];
+            gpm = 0;
+            isVerticalError = false;
+
+            startStopBtn.innerHTML = `<i class="fa-solid fa-stop"></i><span>Parar Treino</span>`;
+            startStopBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+            startStopBtn.classList.add('bg-slate-700', 'hover:bg-slate-600');
+
+            if (!isSimulating) {
+                window.addEventListener('devicemotion', handleMotionEvent);
+            } else {
+                startSimulationLoop();
+            }
+
+            // Loop de atualização contínua de status
+            requestAnimationFrame(updateLoop);
+        }
+
+        // Parar Monitoramento
+        function stopTraining() {
+            isTraining = false;
+            window.removeEventListener('devicemotion', handleMotionEvent);
+
+            startStopBtn.innerHTML = `<i class="fa-solid fa-play"></i><span>Iniciar Treino</span>`;
+            startStopBtn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+            startStopBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-500');
+
+            // Resetar Interface para Estado Inicial
+            appBody.className = "h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-idle";
+            statusBadge.textContent = "Treino Finalizado";
+            statusBadge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 mb-2 border border-slate-700";
+            mainFeedback.textContent = "Pressione 'Iniciar Treino' para recomeçar";
+            gpmDisplay.textContent = "0";
+            tiltBubble.style.left = "50%";
+            tiltStatusText.textContent = "Nivelado";
+            tiltStatusText.className = "text-xs font-bold text-slate-300";
+        }
+
+        // Processar Dados do Acelerômetro Real
+        function handleMotionEvent(event) {
+            if (!isTraining || isSimulating) return;
+
+            // Aceleração incluindo ou excluindo gravidade conforme disponibilidade
+            const acc = event.acceleration || event.accelerationIncludingGravity;
+            if (!acc) return;
+
+            const x = acc.x || 0;
+            const y = acc.y || 0;
+            const z = acc.z || 0;
+
+            // Debug na tela
+            accXEl.textContent = x.toFixed(1);
+            accYEl.textContent = y.toFixed(1);
+            accZEl.textContent = z.toFixed(1);
+
+            // 1. Verificar Desvio Vertical (Movimento indesejado para cima/baixo durante o passe)
+            // Se Y ou Z sofrerem alterações bruscas, indica que a lima subiu/desceu
+            const verticalDeviation = Math.sqrt(y * y + (z > 9 ? (z - 9.81) ** 2 : z * z));
+            isVerticalError = verticalDeviation > VERTICAL_TOLERANCE;
+
+            // Atualiza visualizador gráfico da bolha de nível
+            const bubbleOffset = 50 + (y * 4); 
+            const clampedOffset = Math.max(10, Math.min(90, bubbleOffset));
+            tiltBubble.style.left = `${clampedOffset}%`;
+
+            // 2. Detecção de Ritmo/Golpe no Eixo Horizontal (X)
+            const now = Date.now();
+            if (strokeDirection === 0 && x > ACCEL_THRESHOLD) {
+                strokeDirection = 1; // Avanço da lima
+            } else if (strokeDirection === 1 && x < -ACCEL_THRESHOLD) {
+                strokeDirection = -1; // Retorno da lima
+                // Um golpe completo (ir e voltar) concluído
+                registerStroke(now);
+            } else if (Math.abs(x) < 0.5) {
+                strokeDirection = 0;
+            }
+        }
+
+        // Registrar timestamp do golpe e calcular GPM
+        function registerStroke(timestamp) {
+            strokeTimestamps.push(timestamp);
+            // Manter apenas golpes dos últimos 10 segundos para média móvel precisa
+            const windowTime = 10000;
+            strokeTimestamps = strokeTimestamps.filter(t => timestamp - t <= windowTime);
+
+            if (strokeTimestamps.length >= 2) {
+                const timeSpanSeconds = (timestamp - strokeTimestamps[0]) / 1000;
+                const strokesInWindow = strokeTimestamps.length - 1;
+                gpm = Math.round((strokesInWindow / timeSpanSeconds) * 60);
+            }
+        }
+
+        // Loop de Simulação para Testes no Computador
+        let simInterval = null;
+        function startSimulationLoop() {
+            if (simInterval) clearInterval(simInterval);
+            
+            simInterval = setInterval(() => {
+                if (!isTraining || !isSimulating) {
+                    clearInterval(simInterval);
+                    return;
+                }
+                
+                gpm = parseInt(simGpmSlider.value, 10);
+                isVerticalError = simTiltToggle.checked;
+
+                // Animar bolha de nível no modo simulação
+                if (isVerticalError) {
+                    tiltBubble.style.left = "85%";
+                } else {
+                    tiltBubble.style.left = "50%";
+                }
+
+                // Exibir valores fictícios de acelerômetro
+                accXEl.textContent = (Math.sin(Date.now() / 200) * 4).toFixed(1);
+                accYEl.textContent = isVerticalError ? "4.5" : "0.2";
+                accZEl.textContent = "0.1";
+
+            }, 200);
+        }
+
+        // Loop Principal de Atualização de UI e Validação de Regras do Treino
+        function updateLoop() {
+            if (!isTraining) return;
+
+            gpmDisplay.textContent = gpm;
+
+            // Limpar/Zerar GPM se ficar inativo por mais de 3 segundos
+            if (strokeTimestamps.length > 0 && (Date.now() - strokeTimestamps[strokeTimestamps.length - 1] > 3500)) {
+                gpm = 0;
+                strokeTimestamps = [];
+            }
+
+            // Validação das Regras Mecânicas
+            let isGpmCorrect = gpm >= MIN_GPM && gpm <= MAX_GPM;
+            let isMotionCorrect = false;
+
+            if (isVerticalError) {
+                // ERRO 1: Inclinação/Subida ou Descida incorreta
+                appBody.className = "h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-incorrect status-pulse";
+                statusBadge.textContent = "Movimento Incorreto";
+                statusBadge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-red-950 text-red-200 mb-2 border border-red-700";
+                mainFeedback.textContent = "⚠️ Mantenha a lima na HORIZONTAL! (Ajuste a inclinação)";
+                
+                tiltStatusText.textContent = "DESVIANDO (Incorreto)";
+                tiltStatusText.className = "text-xs font-bold text-red-300";
+
+                triggerHapticFeedback([100, 50, 100]);
+                playSound(220, 'sawtooth', 0.1); // Som grave de erro
+
+            } else if (gpm > 0 && !isGpmCorrect) {
+                // ERRO 2: Cadência fora de 50 - 60 GPM
+                appBody.className = "h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-incorrect status-pulse";
+                statusBadge.textContent = "Ritmo Incorreto";
+                statusBadge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-red-950 text-red-200 mb-2 border border-red-700";
+                
+                if (gpm < MIN_GPM) {
+                    mainFeedback.textContent = "🚀 Muito lento! Acelere o ritmo dos golpes.";
+                } else {
+                    mainFeedback.textContent = "🛑 Muito rápido! Diminua a velocidade da lima.";
+                }
+
+                tiltStatusText.textContent = "Nivelado";
+                tiltStatusText.className = "text-xs font-bold text-emerald-400";
+
+                triggerHapticFeedback(80);
+                playSound(300, 'square', 0.1);
+
+            } else if (gpm > 0 && isGpmCorrect) {
+                // SUCESSO: Movimento plano + Ritmo entre 50 e 60 GPM
+                appBody.className = "h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-correct";
+                statusBadge.textContent = "Movimento Perfeito";
+                statusBadge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-950 text-emerald-200 mb-2 border border-emerald-700";
+                mainFeedback.textContent = "✨ Excelente! Mantenha a cadência e estabilidade!";
+
+                tiltStatusText.textContent = "Nivelado";
+                tiltStatusText.className = "text-xs font-bold text-emerald-200";
+
+                playSound(660, 'sine', 0.08); // Apito agradável de confirmação
+
+            } else {
+                // Aguardando Movimento
+                appBody.className = "h-full flex flex-col justify-between font-sans select-none touch-none transition-colors duration-300 bg-idle";
+                statusBadge.textContent = "Pronto";
+                statusBadge.className = "inline-block px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-400 mb-2 border border-slate-700";
+                mainFeedback.textContent = "Movimente o celular na horizontal como se estivesse limando";
+                
+                tiltStatusText.textContent = "Nivelado";
+                tiltStatusText.className = "text-xs font-bold text-slate-400";
+            }
+
+            requestAnimationFrame(updateLoop);
+        }
+
+        // Função para feedback vibratório no celular
+        function triggerHapticFeedback(pattern) {
+            if ("vibrate" in navigator) {
+                try {
+                    navigator.vibrate(pattern);
+                } catch (e) {
+                    // Ignorar falhas de haptic se não houver permissão do navegador
+                }
+            }
+        }
+    </script>
+</body>
+</html>
